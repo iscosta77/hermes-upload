@@ -12,7 +12,7 @@
         "php": "^8.2",
         "ext-gd": "*",
         "iscos/voodoo-2026": "^1.0",
-        "hermes/validators": "^1.0",
+        "iscosta77/validators": "^1.0",
         "hermes/crop-image": "^1.0"
     },
     "require-dev": {
@@ -22,7 +22,7 @@
         {
             "type": "path",
             "url": "../hermes-validators",
-            "options": {"versions": {"hermes/validators": "1.0.0"}}
+            "options": {"versions": {"iscosta77/validators": "1.0.0"}}
         },
         {
             "type": "path",
