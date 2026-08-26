@@ -91,7 +91,7 @@ final class UploadRepository
             return false;
         }
 
-        if (is_file($upload->caminho)) {
+        if (self::caminhoSeguro($upload->caminho) && is_file($upload->caminho)) {
             @unlink($upload->caminho);
         }
         if ($upload->imagem_id !== null) {
@@ -101,5 +101,14 @@ final class UploadRepository
         $this->db->table('hermes_uploads')->where('id', $id)->delete();
 
         return true;
+    }
+
+    /** So apaga caminhos relativos simples (anti delecao arbitraria via registro adulterado). */
+    private static function caminhoSeguro(string $caminho): bool
+    {
+        return $caminho !== ''
+            && !str_starts_with($caminho, '/')
+            && !preg_match('/^[A-Za-z]:[\\\\\\/]/', $caminho)
+            && !str_contains($caminho, '..');
     }
 }

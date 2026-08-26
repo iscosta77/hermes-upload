@@ -36,6 +36,36 @@ final class Upload
     /** @var array{pasta: string, max_tamanho: int, permitidos: array<int, string>, regras: array<string, string|Closure>} */
     private array $opcoes;
 
+    private const MIMES = [
+        'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'png' => 'image/png',
+        'gif' => 'image/gif', 'webp' => 'image/webp',
+        'pdf' => 'application/pdf', 'txt' => 'text/plain', 'csv' => 'text/csv',
+        'json' => 'application/json', 'zip' => 'application/zip',
+        'doc' => 'application/msword',
+        'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'xls' => 'application/vnd.ms-excel',
+        'xlsx' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    ];
+
+    /** MIME real do arquivo (finfo) — nunca confiar no type do cliente. */
+    private static function detectarMime(string $caminho): string
+    {
+        $fino = new \finfo(FILEINFO_MIME_TYPE);
+        $mime = $fino->file($caminho);
+        return is_string($mime) && $mime !== '' ? $mime : 'application/octet-stream';
+    }
+
+    /** Extensão esperada para o MIME detectado (null = tipo não reconhecido). */
+    private static function mimeParaExtensao(string $mime): ?string
+    {
+        foreach (self::MIMES as $ext => $m) {
+            if ($m === $mime) {
+                return $ext;
+            }
+        }
+        return null;
+    }
+
     /**
      * @param array{ pasta?: string, max_tamanho?: int, permitidos?: array<int, string>,
      *               regras?: array<string, string|Closure> } $opcoes
@@ -73,13 +103,26 @@ final class Upload
 
         $nomeOriginal = (string) ($arquivo['name'] ?? 'arquivo');
         $tamanho = (int) ($arquivo['size'] ?? 0);
-        $extensao = strtolower(pathinfo($nomeOriginal, PATHINFO_EXTENSION));
+        $extensaoCliente = strtolower(pathinfo($nomeOriginal, PATHINFO_EXTENSION));
+
+        // fail-closed: whitelist obrigatoria
+        if ($this->opcoes['permitidos'] === []) {
+            throw new RuntimeException('Configure a opcao "permitidos" (whitelist de extensoes).');
+        }
+
+        // conteudo real do arquivo (finfo) — nunca confiar no nome/MIME do cliente
+        $mimeReal = self::detectarMime((string) $arquivo['tmp_name']);
+        $extensao = self::mimeParaExtensao($mimeReal);
+        if ($extensao === null || !in_array($extensao, $this->opcoes['permitidos'], true)) {
+            throw new RuntimeException(
+                'Tipo de arquivo nao permitido (MIME real: ' . $mimeReal . ').'
+            );
+        }
 
         // 2) validacao: tamanho + extensao (regras do hermes/validators)
         $callbacks = [
             'arquivo' => fn (mixed $v) => $tamanho <= $this->opcoes['max_tamanho'],
-            'extensao' => fn (mixed $v) => $this->opcoes['permitidos'] === []
-                || in_array($extensao, $this->opcoes['permitidos'], true),
+            'extensao' => fn (mixed $v) => in_array($extensao, $this->opcoes['permitidos'], true),
         ];
         $v = Validator::make(
             ['arquivo' => $nomeOriginal, 'extensao' => $extensao] + $dadosForm,
@@ -115,7 +158,7 @@ final class Upload
             'caminho' => $destino,
             'extensao' => $extensao,
             'tamanho' => $tamanho,
-            'mime' => $arquivo['type'] ?? null,
+            'mime' => $mimeReal,
             'imagem_id' => $imagemId,
         ]);
 
@@ -132,20 +175,24 @@ final class Upload
     private function mover(array $arquivo, string $extensao): string
     {
         $pasta = rtrim($this->opcoes['pasta'], '/\\');
-        if (!is_dir($pasta) && !mkdir($pasta, 0777, true) && !is_dir($pasta)) {
+
+        // anti path traversal: pasta de upload sem '..'
+        if ($pasta === '' || str_contains($pasta, '..')) {
+            throw new RuntimeException('Pasta de upload invalida (nao pode conter "..").');
+        }
+        if (!is_dir($pasta) && !mkdir($pasta, 0755, true) && !is_dir($pasta)) {
             throw new RuntimeException("Nao foi possivel criar a pasta de upload: {$pasta}");
         }
 
-        $nomeSeguro = date('Ymd-His') . '-' . bin2hex(random_bytes(4)) . ($extensao !== '' ? '.' . $extensao : '');
+        $nomeSeguro = date('Ymd-His') . '-' . bin2hex(random_bytes(4)) . '.' . $extensao;
         $destino = "{$pasta}/{$nomeSeguro}";
 
         $tmp = (string) $arquivo['tmp_name'];
-        $ok = is_uploaded_file($tmp)
-            ? move_uploaded_file($tmp, $destino)
-            : @rename($tmp, $destino);
 
-        if (!$ok) {
-            throw new RuntimeException('Falha ao mover o arquivo enviado.');
+        // seguranca: so move arquivos que realmente vieram de um POST HTTP.
+        // (sem fallback rename — mover arquivo local arbitrario e vetor de ataque)
+        if (!is_uploaded_file($tmp) || !move_uploaded_file($tmp, $destino)) {
+            throw new RuntimeException('Falha ao mover o arquivo (upload invalido).');
         }
 
         return $destino;
