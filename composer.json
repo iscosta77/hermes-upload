@@ -13,7 +13,7 @@
         "ext-gd": "*",
         "iscos/voodoo-2026": "^1.0",
         "iscosta77/validators": "^1.0",
-        "hermes/crop-image": "^1.0"
+        "iscosta77/crop-image": "^1.0"
     },
     "require-dev": {
         "phpunit/phpunit": "^11.0"
@@ -27,7 +27,7 @@
         {
             "type": "path",
             "url": "../hermes-crop-image",
-            "options": {"versions": {"hermes/crop-image": "1.0.0"}}
+            "options": {"versions": {"iscosta77/crop-image": "1.0.0"}}
         }
     ],
     "autoload": {
