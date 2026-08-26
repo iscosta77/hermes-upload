@@ -1,5 +1,5 @@
 {
-    "name": "hermes/upload",
+    "name": "iscosta77/upload",
     "description": "Upload — upload completo para PHP sem framework: validacao (hermes/validators), processamento de imagem (hermes/crop-image), nome seguro e registro no banco (hermes_uploads) via iscos/voodoo-2026.",
     "type": "library",
     "license": "MIT",
