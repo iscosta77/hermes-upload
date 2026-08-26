@@ -36,6 +36,7 @@ final class UploadTest extends TestCase
             'pasta' => $this->dir . '/uploads',
             'max_tamanho' => 1024 * 1024,
             'permitidos' => ['txt', 'jpg', 'png'],
+            'permitir_local' => true,   // testes simulam upload com arquivos locais
         ]);
     }
 
@@ -87,7 +88,7 @@ final class UploadTest extends TestCase
 
     public function testUploadDeArquivoComum(): void
     {
-        $registro = $this->upload->salvar($this->arquivoFake('nota.txt', 'conteudo'), 'documento');
+        $registro = $this->upload->salvar($this->arquivoFake('nota.txt', "linha um\nlinha dois\n"), 'documento');
         $id = (int) $registro['id'];
 
         $this->assertGreaterThan(0, $id);
@@ -117,7 +118,7 @@ final class UploadTest extends TestCase
     public function testExtensaoNaoPermitida(): void
     {
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessageMatches('/disponível|permitidas/');
+        $this->expectExceptionMessageMatches('/permitid/');
 
         $this->upload->salvar($this->arquivoFake('malicioso.php', '<?php echo 1;'), 'documento');
     }
@@ -126,7 +127,7 @@ final class UploadTest extends TestCase
     {
         $this->expectException(RuntimeException::class);
 
-        $this->upload->salvar($this->arquivoFake('grande.txt', str_repeat('x', 2 * 1024 * 1024)), 'documento');
+        $this->upload->salvar($this->arquivoFake('grande.txt', str_repeat("linha de texto\n", 100000)), 'documento');
     }
 
     public function testSemArquivo(): void
@@ -164,8 +165,8 @@ final class UploadTest extends TestCase
 
     public function testListarEContarPorTipo(): void
     {
-        $this->upload->salvar($this->arquivoFake('a.txt', 'a'), 'documento');
-        $this->upload->salvar($this->arquivoFake('b.txt', 'b'), 'documento');
+        $this->upload->salvar($this->arquivoFake('a.txt', "arquivo a\n"), 'documento');
+        $this->upload->salvar($this->arquivoFake('b.txt', "arquivo b\n"), 'documento');
         $this->upload->salvar($this->fotoFake(), 'galeria');
 
         $this->assertSame(2, $this->repo->contar('documento'));

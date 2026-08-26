@@ -68,7 +68,7 @@ final class Upload
 
     /**
      * @param array{ pasta?: string, max_tamanho?: int, permitidos?: array<int, string>,
-     *               regras?: array<string, string|Closure> } $opcoes
+     *               regras?: array<string, string|Closure>, permitir_local?: bool } $opcoes
      */
     public function __construct(Database $db, array $opcoes = [])
     {
@@ -78,6 +78,7 @@ final class Upload
             'max_tamanho' => 5 * 1024 * 1024,
             'permitidos' => [],
             'regras' => [],
+            'permitir_local' => false,   // fail-closed: so aceita uploads HTTP reais
         ], $opcoes);
     }
 
@@ -189,9 +190,17 @@ final class Upload
 
         $tmp = (string) $arquivo['tmp_name'];
 
-        // seguranca: so move arquivos que realmente vieram de um POST HTTP.
-        // (sem fallback rename — mover arquivo local arbitrario e vetor de ataque)
-        if (!is_uploaded_file($tmp) || !move_uploaded_file($tmp, $destino)) {
+        // seguranca: por padrao so move arquivos que vieram de um POST HTTP real.
+        // 'permitir_local' => true libera importacao local (uso explicito do dev).
+        if (is_uploaded_file($tmp)) {
+            if (!move_uploaded_file($tmp, $destino)) {
+                throw new RuntimeException('Falha ao mover o arquivo (upload invalido).');
+            }
+        } elseif ($this->opcoes['permitir_local'] === true) {
+            if (!is_file($tmp) || !@rename($tmp, $destino)) {
+                throw new RuntimeException('Falha ao mover o arquivo local.');
+            }
+        } else {
             throw new RuntimeException('Falha ao mover o arquivo (upload invalido).');
         }
 
